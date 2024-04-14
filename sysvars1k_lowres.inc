@@ -20,7 +20,7 @@ mem:	dw 0					; x overwritten on load
 init1:	ld l, dfile&$ff			; lowbyte of dfile
 		jr init2
 		
-lastk:	db $ff,$ff,$ff
+LASTK:	db $ff,$ff,$ff
 margin:	db 55
 
 nxtlin:	dw basic				; where BASIC starts executing
@@ -32,7 +32,7 @@ init2:	ld (basic+3), hl		; repair dfile pointer
 		dw 0					; x used by zx81 (T-ADDR)
 		ld h, vars>>8			; msb of end of screen
 		
-frames:	db $37, $e9				; after load, frames decremented -> ld (hl), "jp(hl)"
+FRAMES:	db $37, $e9				; after load, frames decremented -> ld (hl), "jp(hl)"
 
 		xor a 
 		ex af, af'				; delay interrupts
@@ -41,4 +41,3 @@ frames:	db $37, $e9				; after load, frames decremented -> ld (hl), "jp(hl)"
 cdflag:	db 64					; SLOW mode
 
 ; DO NOT CHANGE SYSVARS ABOVE
-
