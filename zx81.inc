@@ -1,3 +1,54 @@
+;------------------------------------------------------------------------------
+; ZX81 constants
+; Copyright (C) Paulo Custodio, 2024
+; License: The Artistic License 2.0, http://www.perlfoundation.org/artistic_license_2_0
+;------------------------------------------------------------------------------
+
+; ZX81 System Variables
+
+ERR_NO		equ $4000
+FLAGS		equ $4001
+ERR_SP		equ $4002
+RAMTOP		equ $4004
+MODE		equ $4006
+PPC			equ $4007
+VERSN		equ $4009
+E_PPC		equ $400a
+D_FILE		equ $400c
+DF_CC		equ $400e
+VARS		equ $4010
+DEST		equ $4012
+E_LINE		equ $4014
+CH_ADD		equ $4016
+X_PTR		equ $4018
+STKBOT		equ $401a
+STKEND		equ $401c
+BREG		equ $401e
+MEM			equ $401f
+FREE1		equ $4021
+DF_SZ		equ $4022
+S_TOP		equ $4023
+LAST_K		equ $4025
+DEBOUNCE	equ $4027
+MARGIN		equ $4028
+NXTLIN		equ $4029
+OLDPPC		equ $402b
+FLAGX		equ $402d
+STRLEN		equ $402e
+T_ADDR		equ $4030
+SEED		equ $4032
+FRAMES		equ $4034
+COORDS_X	equ $4036
+COORDS_Y	equ $4037
+PR_CC		equ $4038
+S_POSN_COL	equ $4039
+S_POSN_ROW	equ $403a
+CDFLAG		equ $403b
+PRBUFF		equ $403c
+MEMBOT		equ $405d
+FREE2		equ $407b
+PROG		equ $407d
+
 ; ZX81 character codes
 
 CH_INV		equ $80
@@ -159,8 +210,7 @@ CH_CLEAR		equ $fd
 CH_RETURN		equ $fe
 CH_COPY			equ $ff
 
-
-; ZX81 keyboard codes codes
+; ZX81 keyboard codes 
 
 NO_KEY		equ 0
 
@@ -211,7 +261,7 @@ KEY_M		equ 37
 KEY_N		equ 38
 KEY_B		equ 39
 
-
 ; ZX81 ROM routines
 
-KEY_DECODE	equ $07bd
+SCAN_KEYBOARD	equ $02bb
+KEY_DECODE		equ $07bd
