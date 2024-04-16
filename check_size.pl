@@ -11,7 +11,7 @@ my $p_file = shift;
 for (path($map_file)->lines) {
 	if (/^__size\s*=\s*\$([0-9A-Fa-f]+)/) {
 		my $size = hex($1);
-		say "Size of $p_file: $size bytes, ", sprintf("%.2f%%", $size/$MAX_SIZE*100);
+		say "Size of $p_file: $size bytes, ", ($MAX_SIZE-$size), " bytes free";
 		if ($size <= $MAX_SIZE) {
 			exit 0;
 		}

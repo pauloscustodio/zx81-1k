@@ -15,7 +15,8 @@ CH_PRINCE			equ CH_O
 CH_GHOST			equ CH_HHHH
 END_MARKER			equ $40		; no-op (ld b,b) that shows a blank on screen
 INIT_DELAY			equ 10
-NUM_RANDOM_MOVES	equ 5
+NUM_RANDOM_MOVES	equ 10
+NUM_DOTS			equ 121
 
 ; use the sysvars as variable area
 RSEED 				equ $4000	; word
@@ -40,21 +41,13 @@ GHOST2_RANDOM_MOVES	equ $4015	; byte
 
 
 ; increment score
-INC_SCORE_10:
-		push hl
-		push af
-		ld hl, score+4				; last score digit
-		jr next_digit
-		
-INC_SCORE_1:
+INC_SCORE:
 		push hl
 		push af
 		ld hl, score+5				; 1 position behind score
-		jr next_digit
-		
+		db $01						; ld bc,NN; eats next instruction
 add_ten:
 		ld (hl), CH_0				; set to "0"
-next_digit:
 		dec hl						; previous digit
 		inc (hl)					; increment it
 		ld a, (hl)					; get digit
@@ -184,7 +177,6 @@ no_level_change:
 ; setup board
 ; add dots to all spaces, then whipe ghosts home and add stars
 		ld hl, board-1
-		ld e, -5				; number of dots to eat -4 at ghost home -1 at prince start
 next_board:
 		inc hl
 		ld a, (hl)				; get character
@@ -195,22 +187,17 @@ next_board:
 		cp END_MARKER			; end of board marker
 		jr z, end_fill
 		ld (hl), CH_DOT
-		inc e
 		jr next_board
 end_fill:
-		ld a, e
-		ld (DOTS_TO_EAT), a
-		ld a, CH_MULT
-		ld (board+1*rowsize+1), a
-		ld (board+1*rowsize+15), a
-		ld (board+13*rowsize+1), a
-		ld (board+13*rowsize+15), a
 		xor a
 		ld (board+6*rowsize+8), a
 		ld hl, board+7*rowsize+7
 		ld (hl+), a
 		ld (hl+), a
 		ld (hl+), a
+
+		ld a, NUM_DOTS
+		ld (DOTS_TO_EAT), a
 		
 ; setup prince
 		ld bc, (13<<8) + 8
@@ -231,42 +218,35 @@ end_fill:
 		xor a
 		ld (GHOST1_SAVED_CHAR), A
 		ld (GHOST2_SAVED_CHAR), A
+		ld a, NUM_RANDOM_MOVES
+		ld (GHOST1_RANDOM_MOVES), A
+		ld (GHOST2_RANDOM_MOVES), A
 
 ; Start Game
 game_loop:
 
 ; Move prince
-		ld bc, (LAST_K)			; read keyboard
-		ld a, b
-		inc a
-		jp z, END_MOVE_PRINCE
-		
-		call KEY_DECODE			; pressed key into A
+		ld a, $fb				; port QWERT
+		in a, ($fe)
+		rra						; bit 0 - Q
+		call nc, SCREEN_UP
+		jr nc, MOVE_PRINCE
+		ld a, $fd 				; port ASDFG
+		in a, ($fe)
+		rra						; bit 0 - A
+		call nc, SCREEN_DOWN
+		jr nc, MOVE_PRINCE
+		ld a, $df 				; port YUIOP
+		in a, ($fe)
+		rra						; bit 0 - P
+		call nc, SCREEN_RIGHT
+		jr nc, MOVE_PRINCE
+		rra						; bit 1 - Q
+		call nc, SCREEN_LEFT
+		jr nc, MOVE_PRINCE
+		jr END_MOVE_PRINCE
 
-		call SCREEN_UP
-		cp KEY_Q
-		jr z, MOVE_PRINCE
-		cp KEY_7
-		jr z, MOVE_PRINCE
 		
-		call SCREEN_DOWN
-		cp KEY_A
-		jr z, MOVE_PRINCE
-		cp KEY_6
-		jr z, MOVE_PRINCE
-		
-		call SCREEN_LEFT
-		cp KEY_O
-		jr z, MOVE_PRINCE
-		cp KEY_5
-		jr z, MOVE_PRINCE
-		
-		call SCREEN_RIGHT
-		cp KEY_P
-		jr z, MOVE_PRINCE
-		cp KEY_8
-		jr nz, END_MOVE_PRINCE
-
 ; MOVE PRINCE
 ; In: DE: distance in screen bytes
 ;     BC: distance in coords
@@ -285,9 +265,7 @@ MOVE_PRINCE:
 		cp CH_GHOST				; ghost
 		jr z, PRINCE_DIED
 		cp CH_DOT				; dot
-		call z, INC_SCORE_1
-		cp CH_MULT				; apple
-		call z, INC_SCORE_10
+		call z, INC_SCORE
 		
 		ld (hl), CH_PRINCE		; draw new prince
 		ld hl, (OLD_ADDR)
@@ -327,6 +305,34 @@ END_MOVE_PRINCE:
 		ld (GHOST1_SAVED_CHAR),de
 		ld (GHOST2_SAVED_CHAR),hl
 
+; check for kill
+check_kill:
+		ld bc, (GHOST1_POS)
+		call SCREEN_ADDR
+		ld de, -rowsize			; check up
+		add hl, de
+		ld a, (hl)
+		cp CH_PRINCE
+		jr z, PRINCE_EATEN
+		
+		ld de, +rowsize+1		; check right
+		add hl, de
+		ld a, (hl)
+		cp CH_PRINCE
+		jr z, PRINCE_EATEN
+
+		ld de, -1+rowsize		; check down
+		add hl, de
+		ld a, (hl)
+		cp CH_PRINCE
+		jr z, PRINCE_EATEN
+
+		ld de, -rowsize-1		; check left
+		add hl, de
+		ld a, (hl)
+		cp CH_PRINCE
+		jr z, PRINCE_EATEN
+		
 ; random move?
 		ld a, (GHOST1_RANDOM_MOVES)
 		and a
@@ -422,9 +428,6 @@ MOVE_GHOST:
 		cp CH_GHOST				; other ghost
 		jr z, END_MOVE_GHOST	; no move
 		
-		cp CH_PRINCE			; prince
-		jp z, PRINCE_EATEN
-		
 		ld a, (GHOST1_SAVED_CHAR) ; delete old ghost
 		ld hl, (OLD_ADDR)
 		ld (hl), a
@@ -433,6 +436,19 @@ MOVE_GHOST:
 		ld a, (hl)
 		ld (GHOST1_SAVED_CHAR), a
 		ld (hl), CH_GHOST
+		
+		ld hl, (GHOST1_POS)
+		ld bc, (DELTA_POS)
+		
+		ld a, h
+		add a, b 
+		ld h, a
+		
+		ld a, l
+		add a, c 
+		ld l, a
+		
+		ld (GHOST1_POS), hl
 
 END_MOVE_GHOST:
 
@@ -486,9 +502,7 @@ board:	db X,X,X,X,X,X,X,X,X,X,X,X,X,X,X,X,X,CH_NEWLINE
 press_enter_message:
 		db CH_NEWLINE
 		db CH_P,CH_R,CH_E,CH_S,CH_S,CH_SPACE
-		db CH_E,CH_N,CH_T,CH_E,CH_R,CH_SPACE
-		db CH_T,CH_O,CH_SPACE
-		db CH_S,CH_T,CH_A,CH_R,CH_T
+		db CH_E,CH_N,CH_T,CH_E,CH_R
 		db CH_NEWLINE
 		
 vars:	db 128					; overwitten after load by "jp(hl)"
