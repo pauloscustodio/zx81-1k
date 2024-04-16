@@ -7,71 +7,36 @@
 		include "../zx81.inc"
 		include "../sysvars1k_lowres.inc"
 		
-JP_HL		equ $e9
-X			equ CH_XXXX
-_			equ CH_____
-rowsize		equ 18
-CH_PRINCE	equ CH_O
-CH_GHOST	equ CH_HHHH
-END_MARKER	equ $40				; no-op (ld b,b) that shows a blank on screen
-INIT_LEVEL	equ 10
+JP_HL				equ $e9
+X					equ CH_XXXX
+_					equ CH_____
+rowsize				equ 18
+CH_PRINCE			equ CH_O
+CH_GHOST			equ CH_HHHH
+END_MARKER			equ $40		; no-op (ld b,b) that shows a blank on screen
+INIT_DELAY			equ 10
+NUM_RANDOM_MOVES	equ 5
 
 ; use the sysvars as variable area
 RSEED 				equ $4000	; word
 PRINCE_POS			equ $4002	; word
-GHOST1_POS			equ $4004	; word
-GHOST2_POS			equ $4008	; word
-GHOST1_SAVED_CHAR	equ $400a	; byte
-GHOST2_SAVED_CHAR	equ $400b	; byte
-; cannot used DFILE, $400c
-DOTS_TO_EAT			equ $400e	; byte
-OLD_ADDR			equ $400f	; word
-NEW_ADDR			equ $4011	; word
-DELTA_POS			equ $4013	; word
-DELAY_TIME			equ $4015
 
-; wait for a single key press (key up, key down)
-; input -
-; output: A = keypress, 0 if no key
-; uses all registers
-WAIT_KEYPRESS:
-		ld a, (LAST_K)
-		inc a 					; test keypress
-		jr nz, WAIT_KEYPRESS	; A was not $ff, a key is pressed
-		
-wait_key_down:
-		ld bc, (LAST_K)			; get key data in BC
-		ld a, c					; copy port to A
-		inc a					; test keypress
-		jr z, wait_key_down		; A was $ff, no key is pressed
-		jp KEY_DECODE
+OLD_ADDR			equ $4004	; word
+NEW_ADDR			equ $4006	; word
+DELTA_POS			equ $4008	; word
 
+DOTS_TO_EAT			equ $400a	; byte
+DELAY_TIME			equ $400b	; byte
 
-; Pseudo-random number into A
-RANDOM:	push hl
-		ld hl, (RSEED)			; point into ROM
-		inc hl					; next random number
-		ld a, h
-		and $1f					; keep within ROM space
-		ld h, a
-		ld (RSEED), hl			; store new pointer
-		ld a, (hl)
-		ld hl, FRAMES
-		xor (hl)				; more randomness
-		pop hl
-		ret
-		
+; cannot use DFILE, $400c
 
-; delay B 1/50 seconds
-; uses all registers
-DELAY_B:
-		ld hl, FRAMES
-		ld a, (HL)
-		sub b
-wait_delay_b:
-		cp (hl)
-		jr nz, wait_delay_b
-		ret
+GHOST1_POS			equ $400e	; word
+GHOST1_SAVED_CHAR	equ $4010	; byte
+GHOST1_RANDOM_MOVES	equ $4011	; byte
+
+GHOST2_POS			equ $4012	; word
+GHOST2_SAVED_CHAR	equ $4014	; byte
+GHOST2_RANDOM_MOVES	equ $4015	; byte
 
 
 ; increment score
@@ -130,6 +95,28 @@ SCREEN_ADDR:
 		ret
 
 
+; delta in four directions
+SCREEN_UP:
+		ld de, -rowsize
+		ld bc, $ff00
+		ret
+
+SCREEN_DOWN:
+		ld de, rowsize
+		ld bc, $0100
+		ret
+
+SCREEN_LEFT:
+		ld de, -1
+		ld bc, $00ff
+		ret
+
+SCREEN_RIGHT:
+		ld de, 1
+		ld bc, $0001
+		ret
+		
+
 ; MAIN PROPGRAM
 main:
 		
@@ -138,10 +125,22 @@ main:
 		ld (hl), CH_NEWLINE		; show the message
 		
 ; wait for enter key
-wait_enter:
-		call WAIT_KEYPRESS	 	; keypress -> A
+
+; wait for a single key press (key up, key down)
+WAIT_KEYPRESS:
+		ld a, (LAST_K)
+		inc a 					; test keypress
+		jr nz, WAIT_KEYPRESS	; A was not $ff, a key is pressed
+		
+wait_key_down:
+		ld bc, (LAST_K)			; get key data in BC
+		ld a, c					; copy port to A
+		inc a					; test keypress
+		jr z, wait_key_down		; A was $ff, no key is pressed
+		call KEY_DECODE
+
 		cp KEY_NEWLINE
-		jr nz, wait_enter
+		jr nz, WAIT_KEYPRESS
 		
 ; remove "PRESS ENTER" messsage
 		ld hl, press_enter_message
@@ -170,7 +169,7 @@ reset_score:
 		jr nz, reset_score
 
 ; init level
-		ld a, INIT_LEVEL
+		ld a, INIT_DELAY
 		ld (DELAY_TIME), a
 		
 ; NEXT LEVEL
@@ -240,37 +239,33 @@ game_loop:
 		ld bc, (LAST_K)			; read keyboard
 		ld a, b
 		inc a
-		jp z, PRINCE_NO_MOVE
+		jp z, END_MOVE_PRINCE
 		
 		call KEY_DECODE			; pressed key into A
 
-		ld de, -rowsize
-		ld bc, $ff00
+		call SCREEN_UP
 		cp KEY_Q
 		jr z, MOVE_PRINCE
 		cp KEY_7
 		jr z, MOVE_PRINCE
 		
-		ld de, rowsize
-		ld bc, $0100
+		call SCREEN_DOWN
 		cp KEY_A
 		jr z, MOVE_PRINCE
 		cp KEY_6
 		jr z, MOVE_PRINCE
 		
-		ld de, -1
-		ld bc, $00ff
+		call SCREEN_LEFT
 		cp KEY_O
 		jr z, MOVE_PRINCE
 		cp KEY_5
 		jr z, MOVE_PRINCE
 		
-		ld de, 1
-		ld bc, $0001
+		call SCREEN_RIGHT
 		cp KEY_P
 		jr z, MOVE_PRINCE
 		cp KEY_8
-		jr nz, PRINCE_NO_MOVE
+		jr nz, END_MOVE_PRINCE
 
 ; MOVE PRINCE
 ; In: DE: distance in screen bytes
@@ -286,7 +281,7 @@ MOVE_PRINCE:
 		
 		ld a, (hl)				; character at new position
 		cp X 					; wall
-		jr z, PRINCE_NO_MOVE	; no move
+		jr z, END_MOVE_PRINCE	; no move
 		cp CH_GHOST				; ghost
 		jr z, PRINCE_DIED
 		cp CH_DOT				; dot
@@ -309,21 +304,152 @@ MOVE_PRINCE:
 		ld l, a
 		
 		ld (PRINCE_POS), hl
-		jr PRINCE_NO_MOVE
+		jr END_MOVE_PRINCE
 		
 PRINCE_DIED:
 		ld hl, (OLD_ADDR)
+PRINCE_EATEN:
 		ld (hl), CH_X+CH_INV	; death mark
 		jp main					; jump back to main
 		
-PRINCE_NO_MOVE:
+END_MOVE_PRINCE:
 		
+; MOVE GHOSTS
+
+; swap ghosts
+		ld hl, (GHOST1_POS)
+		ld de, (GHOST2_POS)
+		ld (GHOST1_POS),de
+		ld (GHOST2_POS),hl
+
+		ld hl, (GHOST1_SAVED_CHAR)
+		ld de, (GHOST2_SAVED_CHAR)
+		ld (GHOST1_SAVED_CHAR),de
+		ld (GHOST2_SAVED_CHAR),hl
+
+; random move?
+		ld a, (GHOST1_RANDOM_MOVES)
+		and a
+		jr z, COMPUTE_MOVE
+		dec a
+		ld (GHOST1_RANDOM_MOVES), a
+		
+; Pseudo-random number into A
+		ld hl, (RSEED)			; point into ROM
+		inc hl					; next random number
+		ld a, h
+		and $1f					; keep within ROM space
+		ld h, a
+		ld (RSEED), hl			; store new pointer
+		ld a, (hl)
+		ld hl, FRAMES
+		xor (hl)				; more randomness
+
+		rra
+		jr c, MOVE_GHOST_UP
+		rra 
+		jr c, MOVE_GHOST_DOWN
+		rra 
+		jr c, MOVE_GHOST_LEFT
+		jr MOVE_GHOST_RIGHT
+		
+; computed move
+COMPUTE_MOVE:
+		ld hl, (GHOST1_POS)
+		ld de, (PRINCE_POS)
+		
+		ld a, h					; delta-row to h
+		sub d 
+		ld h, a
+		jr nc, row_positive
+		neg
+row_positive:
+		ld d, a					; abs(delta-row) to d
+		
+		ld a, l					; delta-col to l
+		sub e 
+		ld l, a
+		jr nc, col_positive
+		neg
+col_positive:
+		ld e, a					; abs(delta-col) to e
+		
+		cp d
+		jr nc, move_col			; abs(delta-col) >= abs(delta-row)
+
+move_row:
+		ld a, h
+		rra
+		jr c, MOVE_GHOST_UP		; delta-row < 0
+		jr MOVE_GHOST_DOWN
+
+move_col:
+		ld a, l
+		rra
+		jr c, MOVE_GHOST_LEFT		; delta-row < 0
+		jr MOVE_GHOST_RIGHT
+
+
+MOVE_GHOST_UP:
+		call SCREEN_UP
+		jr MOVE_GHOST
+
+MOVE_GHOST_DOWN:
+		call SCREEN_DOWN
+		jr MOVE_GHOST
+		
+MOVE_GHOST_LEFT:
+		call SCREEN_LEFT
+		jr MOVE_GHOST
+		
+MOVE_GHOST_RIGHT:
+		call SCREEN_RIGHT
+		
+; In: DE: distance in screen bytes
+;     BC: distance in coords
+MOVE_GHOST:
+		ld (DELTA_POS), bc		; save delta-position
+		
+		ld bc, (GHOST1_POS)
+		call SCREEN_ADDR
+		ld (OLD_ADDR), hl
+		add hl, de
+		ld (NEW_ADDR), hl
+		
+		ld a, (hl)				; character at new position
+		cp X 					; wall
+		jr z, END_MOVE_GHOST	; no move
+		cp CH_GHOST				; other ghost
+		jr z, END_MOVE_GHOST	; no move
+		
+		cp CH_PRINCE			; prince
+		jp z, PRINCE_EATEN
+		
+		ld a, (GHOST1_SAVED_CHAR) ; delete old ghost
+		ld hl, (OLD_ADDR)
+		ld (hl), a
+		
+		ld hl, (NEW_ADDR)		; draw new ghost, save char under
+		ld a, (hl)
+		ld (GHOST1_SAVED_CHAR), a
+		ld (hl), CH_GHOST
+
+END_MOVE_GHOST:
+
+; delay, faster as level increases
 
 		ld a, (DELAY_TIME)		; wait x/50 seconds
 		ld b, a 
-		call DELAY_B
+
+		ld hl, FRAMES
+		ld a, (HL)
+		sub b
+wait_delay_b:
+		cp (hl)
+		jr nz, wait_delay_b
 		
-; check iof end of dots
+		
+; check if end of dots
 		ld a, (DOTS_TO_EAT)
 		and a
 		jp z, next_level
