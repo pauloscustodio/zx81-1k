@@ -18,9 +18,14 @@ INIT_DELAY			equ 10
 NUM_RANDOM_MOVES	equ 10
 NUM_DOTS			equ 121
 
+DISTANCE_UP			equ -rowsize
+DISTANCE_DOWN 		equ rowsize
+DISTANCE_LEFT		equ -1
+DISTANCE_RIGHT		equ 1
+
 ; use the sysvars as variable area
 RSEED 				equ $4000	; word
-PRINCE_POS			equ $4002	; word
+PRINCE_ADDR			equ $4002	; word
 
 OLD_ADDR			equ $4004	; word
 NEW_ADDR			equ $4006	; word
@@ -90,22 +95,22 @@ SCREEN_ADDR:
 
 ; delta in four directions
 SCREEN_UP:
-		ld de, -rowsize
+		ld de, DISTANCE_UP
 		ld bc, $ff00
 		ret
 
 SCREEN_DOWN:
-		ld de, rowsize
+		ld de, DISTANCE_DOWN
 		ld bc, $0100
 		ret
 
 SCREEN_LEFT:
-		ld de, -1
+		ld de, DISTANCE_LEFT
 		ld bc, $00ff
 		ret
 
 SCREEN_RIGHT:
-		ld de, 1
+		ld de, DISTANCE_RIGHT
 		ld bc, $0001
 		ret
 		
@@ -190,8 +195,8 @@ next_board:
 		jr next_board
 end_fill:
 		xor a
-		ld (board+6*rowsize+8), a
-		ld hl, board+7*rowsize+7
+		ld (board+6*DISTANCE_DOWN+8), a
+		ld hl, board+7*DISTANCE_DOWN+7
 		ld (hl+), a
 		ld (hl+), a
 		ld (hl+), a
@@ -200,9 +205,8 @@ end_fill:
 		ld (DOTS_TO_EAT), a
 		
 ; setup prince
-		ld bc, (13<<8) + 8
-		ld (PRINCE_POS), bc
-		call SCREEN_ADDR
+		ld hl, board + (13*DISTANCE_DOWN) + 8
+		ld (PRINCE_ADDR), hl
 		ld (HL), CH_PRINCE
 		
 ; setup ghosts		
@@ -229,20 +233,20 @@ game_loop:
 		ld a, $fb				; port QWERT
 		in a, ($fe)
 		rra						; bit 0 - Q
-		call nc, SCREEN_UP
+		ld de, DISTANCE_UP		; move up
 		jr nc, MOVE_PRINCE
 		ld a, $fd 				; port ASDFG
 		in a, ($fe)
 		rra						; bit 0 - A
-		call nc, SCREEN_DOWN
+		ld de, DISTANCE_DOWN	; move down
 		jr nc, MOVE_PRINCE
 		ld a, $df 				; port YUIOP
 		in a, ($fe)
 		rra						; bit 0 - P
-		call nc, SCREEN_RIGHT
+		ld de, DISTANCE_RIGHT	; move right
 		jr nc, MOVE_PRINCE
 		rra						; bit 1 - Q
-		call nc, SCREEN_LEFT
+		ld de, DISTANCE_LEFT	; move left
 		jr nc, MOVE_PRINCE
 		jr END_MOVE_PRINCE
 
@@ -251,11 +255,7 @@ game_loop:
 ; In: DE: distance in screen bytes
 ;     BC: distance in coords
 MOVE_PRINCE:
-		ld (DELTA_POS), bc		; save delta-position
-		
-		ld bc, (PRINCE_POS)
-		call SCREEN_ADDR
-		ld (OLD_ADDR), hl
+		ld hl, (PRINCE_ADDR)
 		add hl, de
 		ld (NEW_ADDR), hl
 		
@@ -268,20 +268,11 @@ MOVE_PRINCE:
 		call z, INC_SCORE
 		
 		ld (hl), CH_PRINCE		; draw new prince
-		ld hl, (OLD_ADDR)
+		ld hl, (PRINCE_ADDR)
 		ld (hl), CH_SPACE		; delete old prince
 		
-		ld hl, (PRINCE_POS)		; move coords
-		ld bc, (DELTA_POS)		; delta position
-		ld a, h
-		add a, b 
-		ld h, a
-		
-		ld a, l 
-		add a, c 
-		ld l, a
-		
-		ld (PRINCE_POS), hl
+		ld hl, (NEW_ADDR)		; move coords
+		ld (PRINCE_ADDR), hl 	; new position
 		jr END_MOVE_PRINCE
 		
 PRINCE_DIED:
@@ -309,25 +300,25 @@ END_MOVE_PRINCE:
 check_kill:
 		ld bc, (GHOST1_POS)
 		call SCREEN_ADDR
-		ld de, -rowsize			; check up
+		ld de, DISTANCE_UP		; check up
 		add hl, de
 		ld a, (hl)
 		cp CH_PRINCE
 		jr z, PRINCE_EATEN
 		
-		ld de, +rowsize+1		; check right
+		ld de, -DISTANCE_UP+DISTANCE_RIGHT	; check right
 		add hl, de
 		ld a, (hl)
 		cp CH_PRINCE
 		jr z, PRINCE_EATEN
 
-		ld de, -1+rowsize		; check down
+		ld de, -DISTANCE_RIGHT+DISTANCE_DOWN; check down
 		add hl, de
 		ld a, (hl)
 		cp CH_PRINCE
 		jr z, PRINCE_EATEN
 
-		ld de, -rowsize-1		; check left
+		ld de, -DISTANCE_DOWN+DISTANCE_LEFT	; check left
 		add hl, de
 		ld a, (hl)
 		cp CH_PRINCE
@@ -362,7 +353,7 @@ check_kill:
 ; computed move
 COMPUTE_MOVE:
 		ld hl, (GHOST1_POS)
-		ld de, (PRINCE_POS)
+		ld de, (PRINCE_ADDR)
 		
 		ld a, h					; delta-row to h
 		sub d 
