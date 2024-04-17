@@ -36,11 +36,11 @@ DELAY_TIME			equ $400b	; byte
 
 ; cannot use DFILE, $400c
 
-GHOST1_POS			equ $400e	; word
+GHOST1_ADDR			equ $400e	; word
 GHOST1_SAVED_CHAR	equ $4010	; byte
 GHOST1_RANDOM_MOVES	equ $4011	; byte
 
-GHOST2_POS			equ $4012	; word
+GHOST2_ADDR			equ $4012	; word
 GHOST2_SAVED_CHAR	equ $4014	; byte
 GHOST2_RANDOM_MOVES	equ $4015	; byte
 
@@ -67,53 +67,6 @@ add_ten:
 		pop hl
 		ret
 
-
-; SCREEN address
-; input BC = row/col
-; output HL = address
-SCREEN_ADDR:
-		push af
-		push de
-		
-		ld a, b					; row
-		add a, a				; row*2
-		ld l, a
-		add a, a				; row*4
-		add a, a				; row*8
-		add a, a				; row*16
-		add a, l				; row*18
-		add a, c				; row*18+col
-		ld l, a
-		ld h, 0
-		ld de, board
-		add hl, de
-		
-		pop de
-		pop af
-		ret
-
-
-; delta in four directions
-SCREEN_UP:
-		ld de, DISTANCE_UP
-		ld bc, $ff00
-		ret
-
-SCREEN_DOWN:
-		ld de, DISTANCE_DOWN
-		ld bc, $0100
-		ret
-
-SCREEN_LEFT:
-		ld de, DISTANCE_LEFT
-		ld bc, $00ff
-		ret
-
-SCREEN_RIGHT:
-		ld de, DISTANCE_RIGHT
-		ld bc, $0001
-		ret
-		
 
 ; MAIN PROPGRAM
 main:
@@ -210,14 +163,12 @@ end_fill:
 		ld (HL), CH_PRINCE
 		
 ; setup ghosts		
-		ld bc, (7<<8) + 7
-		ld (GHOST1_POS), bc
-		call SCREEN_ADDR
+		ld hl, board + (7*DISTANCE_DOWN) + 7
+		ld (GHOST1_ADDR), bc
 		ld (HL), CH_GHOST
-		inc bc
-		inc bc
-		ld (GHOST2_POS), bc
-		call SCREEN_ADDR
+		inc hl
+		inc hl
+		ld (GHOST2_ADDR), bc
 		ld (HL), CH_GHOST
 		xor a
 		ld (GHOST1_SAVED_CHAR), A
@@ -253,7 +204,6 @@ game_loop:
 		
 ; MOVE PRINCE
 ; In: DE: distance in screen bytes
-;     BC: distance in coords
 MOVE_PRINCE:
 		ld hl, (PRINCE_ADDR)
 		add hl, de
@@ -276,7 +226,7 @@ MOVE_PRINCE:
 		jr END_MOVE_PRINCE
 		
 PRINCE_DIED:
-		ld hl, (OLD_ADDR)
+		ld hl, (PRINCE_ADDR)
 PRINCE_EATEN:
 		ld (hl), CH_X+CH_INV	; death mark
 		jp main					; jump back to main
@@ -286,10 +236,10 @@ END_MOVE_PRINCE:
 ; MOVE GHOSTS
 
 ; swap ghosts
-		ld hl, (GHOST1_POS)
-		ld de, (GHOST2_POS)
-		ld (GHOST1_POS),de
-		ld (GHOST2_POS),hl
+		ld hl, (GHOST1_ADDR)
+		ld de, (GHOST2_ADDR)
+		ld (GHOST1_ADDR),de
+		ld (GHOST2_ADDR),hl
 
 		ld hl, (GHOST1_SAVED_CHAR)
 		ld de, (GHOST2_SAVED_CHAR)
@@ -298,8 +248,7 @@ END_MOVE_PRINCE:
 
 ; check for kill
 check_kill:
-		ld bc, (GHOST1_POS)
-		call SCREEN_ADDR
+		ld hl, (GHOST1_ADDR)
 		ld de, DISTANCE_UP		; check up
 		add hl, de
 		ld a, (hl)
@@ -352,7 +301,7 @@ check_kill:
 		
 ; computed move
 COMPUTE_MOVE:
-		ld hl, (GHOST1_POS)
+		ld hl, (GHOST1_ADDR)
 		ld de, (PRINCE_ADDR)
 		
 		ld a, h					; delta-row to h
@@ -388,28 +337,25 @@ move_col:
 
 
 MOVE_GHOST_UP:
-		call SCREEN_UP
+		ld de, DISTANCE_UP
 		jr MOVE_GHOST
 
 MOVE_GHOST_DOWN:
-		call SCREEN_DOWN
+		ld de, DISTANCE_DOWN
 		jr MOVE_GHOST
 		
 MOVE_GHOST_LEFT:
-		call SCREEN_LEFT
+		ld de, DISTANCE_LEFT
 		jr MOVE_GHOST
 		
 MOVE_GHOST_RIGHT:
-		call SCREEN_RIGHT
+		ld de, DISTANCE_RIGHT
 		
 ; In: DE: distance in screen bytes
-;     BC: distance in coords
 MOVE_GHOST:
 		ld (DELTA_POS), bc		; save delta-position
 		
-		ld bc, (GHOST1_POS)
-		call SCREEN_ADDR
-		ld (OLD_ADDR), hl
+		ld hl, (GHOST1_ADDR)
 		add hl, de
 		ld (NEW_ADDR), hl
 		
@@ -420,26 +366,17 @@ MOVE_GHOST:
 		jr z, END_MOVE_GHOST	; no move
 		
 		ld a, (GHOST1_SAVED_CHAR) ; delete old ghost
-		ld hl, (OLD_ADDR)
+		ld hl, (GHOST1_ADDR)
 		ld (hl), a
 		
 		ld hl, (NEW_ADDR)		; draw new ghost, save char under
 		ld a, (hl)
 		ld (GHOST1_SAVED_CHAR), a
 		ld (hl), CH_GHOST
+
+		ld hl, (NEW_ADDR)		; move coords
+		ld (GHOST1_ADDR), hl
 		
-		ld hl, (GHOST1_POS)
-		ld bc, (DELTA_POS)
-		
-		ld a, h
-		add a, b 
-		ld h, a
-		
-		ld a, l
-		add a, c 
-		ld l, a
-		
-		ld (GHOST1_POS), hl
 
 END_MOVE_GHOST:
 
