@@ -48,6 +48,20 @@ SHORTEST_DISTANCE	equ $4016 	; word
 SHORTEST_NEW_ADDR	equ $4018 	; word 
 
 
+; OUT: A=random number
+RANDOM:	push hl
+		ld hl, (RSEED)			; point into ROM
+		inc hl					; next random number
+		ld a, h
+		and $1f					; keep within ROM space
+		ld h, a
+		ld (RSEED), hl			; store new pointer
+		ld a, (hl)
+		ld hl, FRAMES
+		xor (hl)				; more randomness
+		pop hl
+		ret 
+		
 ; IN: DE-distance to move
 CHECK_GHOST_MOVE:
 		ld hl, (GHOST1_ADDR)
@@ -93,9 +107,10 @@ INC_SCORE:
 		push hl
 		push af
 		ld hl, score+5				; 1 position behind score
-		db $01						; ld bc,NN; eats next instruction
+		jr skip_digit
 add_ten:
 		ld (hl), CH_0				; set to "0"
+skip_digit:		
 		dec hl						; previous digit
 		inc (hl)					; increment it
 		ld a, (hl)					; get digit
@@ -324,16 +339,7 @@ check_random_move:
 		ld (GHOST1_RANDOM_MOVES), a
 		
 ; Pseudo-random number into A
-		ld hl, (RSEED)			; point into ROM
-		inc hl					; next random number
-		ld a, h
-		and $1f					; keep within ROM space
-		ld h, a
-		ld (RSEED), hl			; store new pointer
-		ld a, (hl)
-		ld hl, FRAMES
-		xor (hl)				; more randomness
-
+		call RANDOM
 		rra
 		ld de, DISTANCE_UP
 		jr c, MOVE_GHOST_RANDOM
@@ -425,7 +431,8 @@ board:	db X,X,X,X,X,X,X,X,X,X,X,X,X,X,X,X,X,CH_NEWLINE
 press_enter_message:
 		db CH_NEWLINE
 		db CH_P,CH_R,CH_E,CH_S,CH_S,CH_SPACE
-		db CH_E,CH_N,CH_T,CH_E,CH_R
+		db CH_E,CH_N,CH_T,CH_E,CH_R,CH_SPACE
+		db CH_T,CH_O,CH_SPACE,CH_S,CH_T,CH_A,CH_R,CH_T
 		db CH_NEWLINE
 		
 vars:	db 128					; overwitten after load by "jp(hl)"
