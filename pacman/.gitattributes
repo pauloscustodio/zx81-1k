@@ -1,5 +1,0 @@
-*.asm   text eol=lf
-*.inc   text eol=lf
-Makefile text eol=lf
-README* text eol=lf
-LICENSE* text eol=lf
