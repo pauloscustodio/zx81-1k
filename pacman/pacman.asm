@@ -239,26 +239,80 @@ end_fill:
 game_loop:
 
 ; Move prince
-		ld a, $fb				; port QWERT
-		in a, ($fe)
-		rra						; bit 0 - Q
+		ld hl, (LAST_K)
+		
+keyboard1:
+		; check up - Q
+		bit 1, h
+		jr nz, keyboard2
+		bit 2, l
+		jr nz, keyboard2
+		
+keyboard_do_up:
 		ld de, DISTANCE_UP		; move up
-		jr nc, MOVE_PRINCE
-		ld a, $fd 				; port ASDFG
-		in a, ($fe)
-		rra						; bit 0 - A
-		ld de, DISTANCE_DOWN	; move down
-		jr nc, MOVE_PRINCE
-		ld a, $df 				; port YUIOP
-		in a, ($fe)
-		rra						; bit 0 - P
-		ld de, DISTANCE_RIGHT	; move right
-		jr nc, MOVE_PRINCE
-		rra						; bit 1 - Q
-		ld de, DISTANCE_LEFT	; move left
-		jr nc, MOVE_PRINCE
-		jr END_MOVE_PRINCE
+		jr MOVE_PRINCE
+		
+keyboard2:
+		; check up - 7
+		bit 4, h
+		jr nz, keyboard3
+		bit 4, l
+		jr z, keyboard_do_up
+		
+keyboard3:
+		; check down - A
+		bit 1, h
+		jr nz, keyboard4
+		bit 1, l
+		jr nz, keyboard4
 
+keyboard_do_down:		
+		ld de, DISTANCE_DOWN	; move down
+		jr MOVE_PRINCE
+
+keyboard4:		
+		; check down - 6
+		bit 5, h
+		jr nz, keyboard5
+		bit 4, l
+		jr z, keyboard_do_down
+
+keyboard5:
+		; check left - O
+		bit 2, h
+		jr nz, keyboard6
+		bit 5, l
+		jr nz, keyboard6
+
+keyboard_do_left:		
+		ld de, DISTANCE_LEFT	; move left
+		jr MOVE_PRINCE
+
+keyboard6:
+		; check left - 5
+		bit 5, h
+		jr nz, keyboard7
+		bit 3, l
+		jr z, keyboard_do_left
+
+keyboard7:
+		; check right - P
+		bit 1, h
+		jr nz, keyboard8
+		bit 5, l
+		jr nz, keyboard8
+		
+keyboard_do_right:
+		ld de, DISTANCE_RIGHT	; move right
+		jr MOVE_PRINCE
+		
+keyboard8:
+		; check right - 8
+		bit 3, h
+		jr nz, END_MOVE_PRINCE
+		bit 4, l
+		jr nz, END_MOVE_PRINCE
+		jr keyboard_do_right
 		
 ; MOVE PRINCE
 ; In: DE: distance in screen bytes
