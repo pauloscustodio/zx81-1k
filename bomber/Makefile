@@ -1,4 +1,4 @@
-PROJ = pacman
+PROJ = bomber
 
 all: $(PROJ).P
 $(PROJ).P: $(PROJ).asm ../zx81.inc ../sysvars1k_lowres.inc ../check_size.pl
