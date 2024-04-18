@@ -44,6 +44,49 @@ GHOST2_ADDR			equ $4012	; word
 GHOST2_SAVED_CHAR	equ $4014	; byte
 GHOST2_RANDOM_MOVES	equ $4015	; byte
 
+SHORTEST_DISTANCE	equ $4016 	; word
+SHORTEST_NEW_ADDR	equ $4018 	; word 
+
+
+; IN: DE-distance to move
+CHECK_GHOST_MOVE:
+		ld hl, (GHOST1_ADDR)
+		add hl, de					; new position
+		ld (NEW_ADDR), hl
+		ld a, (hl)
+		cp X 
+		ret z						; wall
+		cp CH_GHOST			
+		ret z 						; other ghost
+		cp CH_PRINCE
+		jp z, POP_PRINCE_DIED		; killed prince
+
+		ld de, (PRINCE_ADDR)
+		and a
+		sbc hl, de
+		jr nc, distance_positive
+		
+		ld a, h
+		cpl
+		ld h, a
+		
+		ld a, l
+		cpl
+		ld l, a
+		inc hl
+distance_positive:
+		ld de, (SHORTEST_DISTANCE)
+		and a
+		sbc hl, de					; C if new_dist < old_dist
+		ret nc
+		
+		add hl, de
+		ld (SHORTEST_DISTANCE), hl
+		ld hl, (NEW_ADDR)
+		ld (SHORTEST_NEW_ADDR), hl
+		
+		ret
+		
 
 ; increment score
 INC_SCORE:
@@ -164,11 +207,11 @@ end_fill:
 		
 ; setup ghosts		
 		ld hl, board + (7*DISTANCE_DOWN) + 7
-		ld (GHOST1_ADDR), bc
+		ld (GHOST1_ADDR), hl
 		ld (HL), CH_GHOST
 		inc hl
 		inc hl
-		ld (GHOST2_ADDR), bc
+		ld (GHOST2_ADDR), hl
 		ld (HL), CH_GHOST
 		xor a
 		ld (GHOST1_SAVED_CHAR), A
@@ -225,9 +268,10 @@ MOVE_PRINCE:
 		ld (PRINCE_ADDR), hl 	; new position
 		jr END_MOVE_PRINCE
 		
+POP_PRINCE_DIED:
+		pop hl 					; remove return address
 PRINCE_DIED:
 		ld hl, (PRINCE_ADDR)
-PRINCE_EATEN:
 		ld (hl), CH_X+CH_INV	; death mark
 		jp main					; jump back to main
 		
@@ -246,37 +290,36 @@ END_MOVE_PRINCE:
 		ld (GHOST1_SAVED_CHAR),de
 		ld (GHOST2_SAVED_CHAR),hl
 
-; check for kill
-check_kill:
-		ld hl, (GHOST1_ADDR)
-		ld de, DISTANCE_UP		; check up
-		add hl, de
-		ld a, (hl)
-		cp CH_PRINCE
-		jr z, PRINCE_EATEN
+; check for kill and best move
+		ld hl, $ffff
+		ld (SHORTEST_DISTANCE), hl
 		
-		ld de, -DISTANCE_UP+DISTANCE_RIGHT	; check right
-		add hl, de
-		ld a, (hl)
-		cp CH_PRINCE
-		jr z, PRINCE_EATEN
+		ld de, DISTANCE_UP		; check up
+		call CHECK_GHOST_MOVE
+		
+		ld de, DISTANCE_RIGHT
+		call CHECK_GHOST_MOVE
+		
+		ld de, DISTANCE_DOWN
+		call CHECK_GHOST_MOVE
+		
+		ld de, DISTANCE_LEFT
+		call CHECK_GHOST_MOVE
 
-		ld de, -DISTANCE_RIGHT+DISTANCE_DOWN; check down
-		add hl, de
-		ld a, (hl)
-		cp CH_PRINCE
-		jr z, PRINCE_EATEN
+		ld a, (SHORTEST_DISTANCE+1)
+		inc a
+		jr nz, check_random_move		; ghost can move
 
-		ld de, -DISTANCE_DOWN+DISTANCE_LEFT	; check left
-		add hl, de
-		ld a, (hl)
-		cp CH_PRINCE
-		jr z, PRINCE_EATEN
+; ghost cannot move
+		ld a, NUM_RANDOM_MOVES
+		ld (GHOST1_RANDOM_MOVES), a
+		jr END_MOVE_GHOST
 		
 ; random move?
+check_random_move:
 		ld a, (GHOST1_RANDOM_MOVES)
 		and a
-		jr z, COMPUTE_MOVE
+		jr z, MOVE_GHOST
 		dec a
 		ld (GHOST1_RANDOM_MOVES), a
 		
@@ -292,72 +335,24 @@ check_kill:
 		xor (hl)				; more randomness
 
 		rra
-		jr c, MOVE_GHOST_UP
-		rra 
-		jr c, MOVE_GHOST_DOWN
-		rra 
-		jr c, MOVE_GHOST_LEFT
-		jr MOVE_GHOST_RIGHT
-		
-; computed move
-COMPUTE_MOVE:
-		ld hl, (GHOST1_ADDR)
-		ld de, (PRINCE_ADDR)
-		
-		ld a, h					; delta-row to h
-		sub d 
-		ld h, a
-		jr nc, row_positive
-		neg
-row_positive:
-		ld d, a					; abs(delta-row) to d
-		
-		ld a, l					; delta-col to l
-		sub e 
-		ld l, a
-		jr nc, col_positive
-		neg
-col_positive:
-		ld e, a					; abs(delta-col) to e
-		
-		cp d
-		jr nc, move_col			; abs(delta-col) >= abs(delta-row)
-
-move_row:
-		ld a, h
-		rra
-		jr c, MOVE_GHOST_UP		; delta-row < 0
-		jr MOVE_GHOST_DOWN
-
-move_col:
-		ld a, l
-		rra
-		jr c, MOVE_GHOST_LEFT		; delta-row < 0
-		jr MOVE_GHOST_RIGHT
-
-
-MOVE_GHOST_UP:
 		ld de, DISTANCE_UP
-		jr MOVE_GHOST
-
-MOVE_GHOST_DOWN:
+		jr c, MOVE_GHOST_RANDOM
+		rra 
 		ld de, DISTANCE_DOWN
-		jr MOVE_GHOST
-		
-MOVE_GHOST_LEFT:
+		jr c, MOVE_GHOST_RANDOM
+		rra 
 		ld de, DISTANCE_LEFT
-		jr MOVE_GHOST
-		
-MOVE_GHOST_RIGHT:
+		jr c, MOVE_GHOST_RANDOM
 		ld de, DISTANCE_RIGHT
 		
-; In: DE: distance in screen bytes
-MOVE_GHOST:
-		ld (DELTA_POS), bc		; save delta-position
-		
+MOVE_GHOST_RANDOM:
 		ld hl, (GHOST1_ADDR)
 		add hl, de
-		ld (NEW_ADDR), hl
+		ld (SHORTEST_NEW_ADDR), hl
+		
+		
+MOVE_GHOST:
+		ld hl, (SHORTEST_NEW_ADDR)
 		
 		ld a, (hl)				; character at new position
 		cp X 					; wall
@@ -369,12 +364,12 @@ MOVE_GHOST:
 		ld hl, (GHOST1_ADDR)
 		ld (hl), a
 		
-		ld hl, (NEW_ADDR)		; draw new ghost, save char under
+		ld hl, (SHORTEST_NEW_ADDR)	; draw new ghost, save char under
 		ld a, (hl)
 		ld (GHOST1_SAVED_CHAR), a
 		ld (hl), CH_GHOST
 
-		ld hl, (NEW_ADDR)		; move coords
+		ld hl, (SHORTEST_NEW_ADDR)	; move coords
 		ld (GHOST1_ADDR), hl
 		
 
