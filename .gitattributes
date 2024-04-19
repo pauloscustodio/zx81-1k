@@ -1,6 +1,8 @@
 *.asm    text eol=lf
+*.bmp    binary
 *.inc    text eol=lf
 *.md     text eol=lf
+*.pdf    binary
 *.pl     text eol=lf
 LICENSE* text eol=lf
 Makefile text eol=lf
