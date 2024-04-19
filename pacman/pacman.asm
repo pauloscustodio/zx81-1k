@@ -5,7 +5,7 @@
 ;------------------------------------------------------------------------------
 
 		include "../zx81.inc"
-		include "../sysvars1k_lowres.inc"
+		include "../model1k_lowres.inc"
 		
 JP_HL				equ $e9
 X					equ CH_XXXX

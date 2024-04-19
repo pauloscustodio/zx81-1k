@@ -1,5 +1,5 @@
 		include "../zx81.inc"
-		include "../sysvars1k_lowres.inc"
+		include "../model1k_lowres.inc"
 		
 ; START OF YOUR CODE
 
